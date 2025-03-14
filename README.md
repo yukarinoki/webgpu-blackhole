@@ -1,6 +1,5 @@
 # WebGPU Black Hole Raytracer
 
-![Black Hole](https://github.com/yukarinoki/webgpu-blackhole-raytracer/blob/main/samples/lava_disk.jpg)
 
 This is a WebGPU-based implementation of a black hole raytracer. It simulates the gravitational lensing effect of a Schwarzschild black hole, allowing users to visualize how light bends around a black hole.
 
@@ -9,6 +8,8 @@ https://webgpu-blackhole-raytracer.netlify.app/
 
 My implementation is based on the repository: [Black-Hole-Raytracer by eliot1019](https://github.com/eliot1019/Black-Hole-Raytracer).  
 I'm very grateful for that implementation!
+
+![Black Hole](https://raw.githubusercontent.com/yukarinoki/webgpu-blackhole/refs/heads/main/samples/blackhole.png))
 
 ## Features
 - Real-time raytracing using WebGPU for high performance
