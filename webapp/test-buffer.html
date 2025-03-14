@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebGPU Buffer Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      line-height: 1.6;
+    }
+    #status {
+      padding: 10px;
+      margin: 10px 0;
+      background-color: #f0f0f0;
+      border-radius: 4px;
+    }
+    #results {
+      margin-top: 20px;
+    }
+    .success {
+      color: green;
+      font-weight: bold;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>WebGPU Buffer Test</h1>
+  <div id="status">Initializing WebGPU...</div>
+  <div id="results"></div>
+
+  <script>
+    // Buffer usage flags
+    const BufferUsage = {
+      COPY_SRC: 0x0001,
+      COPY_DST: 0x0002,
+      INDEX: 0x0004,
+      VERTEX: 0x0008,
+      UNIFORM: 0x0010,
+      STORAGE: 0x0020,
+      INDIRECT: 0x0040,
+      QUERY_RESOLVE: 0x0080,
+      MAP_READ: 0x0100,
+      MAP_WRITE: 0x0200
+    };
+
+    // Helper function to log buffer usage flags
+    function logBufferUsageFlags(usage) {
+      const flags = [];
+      if (usage & BufferUsage.COPY_SRC) flags.push("COPY_SRC");
+      if (usage & BufferUsage.COPY_DST) flags.push("COPY_DST");
+      if (usage & BufferUsage.INDEX) flags.push("INDEX");
+      if (usage & BufferUsage.VERTEX) flags.push("VERTEX");
+      if (usage & BufferUsage.UNIFORM) flags.push("UNIFORM");
+      if (usage & BufferUsage.STORAGE) flags.push("STORAGE");
+      if (usage & BufferUsage.INDIRECT) flags.push("INDIRECT");
+      if (usage & BufferUsage.QUERY_RESOLVE) flags.push("QUERY_RESOLVE");
+      if (usage & BufferUsage.MAP_READ) flags.push("MAP_READ");
+      if (usage & BufferUsage.MAP_WRITE) flags.push("MAP_WRITE");
+      return flags.join(" | ");
+    }
+
+    // Create a buffer with the given usage flags
+    function createBuffer(device, data, usage, label) {
+      console.log(`バッファ作成処理開始: ${label || "無名バッファ"}`);
+      console.log(`元の使用フラグ: ${usage} (${logBufferUsageFlags(usage)})`);
+      
+      // Handle MAP_WRITE and MAP_READ flags specially
+      const hasMapWrite = (usage & BufferUsage.MAP_WRITE) !== 0;
+      const hasMapRead = (usage & BufferUsage.MAP_READ) !== 0;
+      
+      console.log(`フラグ分析: MAP_WRITE=${hasMapWrite}, MAP_READ=${hasMapRead}`);
+      
+      let finalUsage = usage;
+      
+      if (!hasMapWrite && !hasMapRead) {
+        // Normal case: add COPY_DST
+        console.log("ケース1: 通常のバッファ (MAP_WRITEもMAP_READもなし)");
+        console.log("処理: COPY_DSTフラグを追加します");
+        finalUsage = usage | BufferUsage.COPY_DST;
+      } else if (hasMapWrite) {
+        // MAP_WRITE case: only allow COPY_SRC
+        console.log("ケース2: MAP_WRITEフラグあり");
+        console.log("処理: COPY_SRC以外のフラグを削除し、MAP_WRITEを保持します");
+        finalUsage = (usage & BufferUsage.COPY_SRC) | BufferUsage.MAP_WRITE;
+      } else if (hasMapRead) {
+        // MAP_READ case: only allow COPY_DST
+        console.log("ケース3: MAP_READフラグあり");
+        console.log("処理: COPY_DST以外のフラグを削除し、MAP_READを保持します");
+        finalUsage = BufferUsage.MAP_READ | BufferUsage.COPY_DST;
+      }
+      
+      console.log(`最終使用フラグ: ${finalUsage} (${logBufferUsageFlags(finalUsage)})`);
+      console.log(`変更前: ${usage} (${logBufferUsageFlags(usage)})`);
+      console.log(`変更後: ${finalUsage} (${logBufferUsageFlags(finalUsage)})`);
+      
+      try {
+        console.log(`バッファを作成中... サイズ: ${data.byteLength}バイト, mappedAtCreation: ${hasMapWrite}`);
+        
+        // Create the buffer
+        const buffer = device.createBuffer({
+          size: data.byteLength,
+          usage: finalUsage,
+          mappedAtCreation: hasMapWrite,
+          label: label || `Buffer with usage: ${logBufferUsageFlags(finalUsage)}`
+        });
+        
+        console.log("バッファが正常に作成されました");
+        
+        // Write data to the buffer
+        if (hasMapWrite) {
+          console.log("MAP_WRITEフラグあり: getMappedRangeを使用してデータを書き込みます");
+          const arrayBuffer = buffer.getMappedRange();
+          new (data.constructor)(arrayBuffer).set(data);
+          buffer.unmap();
+          console.log("バッファのマッピングを解除しました");
+        } else {
+          console.log("MAP_WRITEフラグなし: queue.writeBufferを使用してデータを書き込みます");
+          device.queue.writeBuffer(buffer, 0, data);
+          console.log("queue.writeBufferでデータを書き込みました");
+        }
+        
+        console.log(`バッファ作成処理完了: ${label || "無名バッファ"}`);
+        return buffer;
+      } catch (error) {
+        console.error(`バッファ作成エラー: ${error.message}`);
+        console.error("エラーの詳細:", error);
+        throw error;
+      }
+    }
+
+    // Test cases
+    const testCases = [
+      { name: "UNIFORM only", usage: BufferUsage.UNIFORM },
+      { name: "COPY_DST only", usage: BufferUsage.COPY_DST },
+      { name: "UNIFORM | COPY_DST", usage: BufferUsage.UNIFORM | BufferUsage.COPY_DST },
+      { name: "STORAGE | COPY_DST", usage: BufferUsage.STORAGE | BufferUsage.COPY_DST },
+      { name: "MAP_WRITE only", usage: BufferUsage.MAP_WRITE },
+      { name: "MAP_WRITE | COPY_SRC", usage: BufferUsage.MAP_WRITE | BufferUsage.COPY_SRC },
+      { name: "MAP_READ only", usage: BufferUsage.MAP_READ },
+      { name: "MAP_READ | COPY_DST", usage: BufferUsage.MAP_READ | BufferUsage.COPY_DST },
+      // Problem cases from original code
+      { name: "MAP_WRITE | COPY_DST", usage: BufferUsage.MAP_WRITE | BufferUsage.COPY_DST },
+      { name: "MAP_WRITE | INDEX", usage: BufferUsage.MAP_WRITE | BufferUsage.INDEX },
+      { name: "MAP_WRITE | INDEX | COPY_DST", usage: BufferUsage.MAP_WRITE | BufferUsage.INDEX | BufferUsage.COPY_DST }
+    ];
+
+    // Run the tests
+    async function runTests() {
+      const statusElement = document.getElementById('status');
+      const resultsElement = document.getElementById('results');
+      
+      console.log("========================================");
+      console.log("WebGPU バッファ使用フラグテスト開始");
+      console.log("========================================");
+      console.log("このテストでは、WebGPUバッファの様々な使用フラグの組み合わせをテストします。");
+      console.log("WebGPU仕様によると、MAP_WRITEフラグがある場合はCOPY_SRCのみ許可されます。");
+      console.log("MAP_READフラグがある場合はCOPY_DSTのみ許可されます。");
+      console.log("========================================");
+      
+      if (!navigator.gpu) {
+        statusElement.textContent = "WebGPU is not supported in this browser";
+        console.error("WebGPUはこのブラウザでサポートされていません。");
+        return;
+      }
+      
+      try {
+        // Initialize WebGPU
+        console.log("WebGPU初期化: アダプターをリクエスト中...");
+        statusElement.textContent = "Requesting adapter...";
+        const adapter = await navigator.gpu.requestAdapter();
+        
+        if (!adapter) {
+          statusElement.textContent = "No GPU adapter found";
+          console.error("GPUアダプターが見つかりませんでした。");
+          return;
+        }
+        
+        console.log("WebGPU初期化: アダプターが見つかりました。デバイスをリクエスト中...");
+        statusElement.textContent = "Requesting device...";
+        const device = await adapter.requestDevice();
+        console.log("WebGPU初期化: デバイスが正常に作成されました。");
+        
+        // Set up error handling
+        device.addEventListener('uncapturederror', (event) => {
+          console.error("WebGPUエラー:", event.error);
+        });
+        
+        statusElement.textContent = "Running tests...";
+        console.log("========================================");
+        console.log("テスト実行開始");
+        console.log("========================================");
+        
+        // Run each test case
+        for (const test of testCases) {
+          console.log("\n");
+          console.log("----------------------------------------");
+          console.log(`テストパターン: ${test.name}`);
+          console.log(`使用フラグ: ${test.usage} (${logBufferUsageFlags(test.usage)})`);
+          console.log("----------------------------------------");
+          
+          const resultItem = document.createElement('div');
+          resultsElement.appendChild(resultItem);
+          
+          try {
+            // Create test data
+            console.log("テストデータを作成中...");
+            const data = new Float32Array(64); // 256 bytes
+            
+            // Create buffer
+            console.log(`バッファを作成中... 使用フラグ: ${test.usage} (${logBufferUsageFlags(test.usage)})`);
+            const buffer = createBuffer(device, data, test.usage, `Test: ${test.name}`);
+            
+            // Success
+            console.log(`✅ 成功: ${test.name} バッファが正常に作成されました。`);
+            resultItem.innerHTML = `<span class="success">✓</span> ${test.name} (${logBufferUsageFlags(test.usage)})`;
+            
+            // Clean up
+            console.log("バッファを破棄中...");
+            buffer.destroy();
+            console.log("バッファが正常に破棄されました。");
+          } catch (error) {
+            // Failure
+            console.error(`❌ 失敗: ${test.name}`);
+            console.error(`エラーメッセージ: ${error.message}`);
+            resultItem.innerHTML = `<span class="error">✗</span> ${test.name} (${logBufferUsageFlags(test.usage)}): ${error.message}`;
+            console.error(`テスト "${test.name}" でエラーが発生しました:`, error);
+          }
+          
+          // Add a small delay between tests
+          console.log(`テストパターン: ${test.name} 完了`);
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        console.log("========================================");
+        console.log("すべてのテストが完了しました。");
+        console.log("========================================");
+        
+        statusElement.textContent = "Tests completed";
+      } catch (error) {
+        statusElement.textContent = `Error: ${error.message}`;
+        console.error("Test error:", error);
+      }
+    }
+
+    // Run tests when the page loads
+    window.addEventListener('load', runTests);
+  </script>
+</body>
+</html>
