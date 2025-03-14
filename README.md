@@ -1,4 +1,4 @@
-# WebGPU Black Hole Raytracer
+# WebGPU BlackHole Raytracer
 
 
 This is a WebGPU-based implementation of a black hole raytracer. It simulates the gravitational lensing effect of a Schwarzschild black hole, allowing users to visualize how light bends around a black hole.
