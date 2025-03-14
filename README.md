@@ -6,10 +6,11 @@ This is a WebGPU-based implementation of a black hole raytracer. It simulates th
 **Try it here**
 https://webgpu-blackhole-raytracer.netlify.app/
 
+![Black Hole](https://raw.githubusercontent.com/yukarinoki/webgpu-blackhole/refs/heads/main/samples/blackhole.png))
+
 My implementation is based on the repository: [Black-Hole-Raytracer by eliot1019](https://github.com/eliot1019/Black-Hole-Raytracer).  
 I'm very grateful for that implementation!
 
-![Black Hole](https://raw.githubusercontent.com/yukarinoki/webgpu-blackhole/refs/heads/main/samples/blackhole.png))
 
 ## Features
 - Real-time raytracing using WebGPU for high performance
